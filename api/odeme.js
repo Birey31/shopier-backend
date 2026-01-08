@@ -1,11 +1,9 @@
 export default async function handler(req, res) {
 
-  // 🔥 CORS HEADER (ŞART)
   res.setHeader("Access-Control-Allow-Origin", "https://reeha.com.tr");
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
 
-  // Preflight (tarayıcı önce OPTIONS atar)
   if (req.method === "OPTIONS") {
     return res.status(200).end();
   }
