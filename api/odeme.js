@@ -1,27 +1,33 @@
-window.startCheckout = function() {
-    if (cart.length === 0) return;
+// api/odeme.js
+export default async function handler(req, res) {
+    if (req.method !== 'POST') return res.status(405).send('Method Not Allowed');
 
-    const item = cart[0]; // Sepetteki ilk ürün
-    const btn = document.getElementById('checkoutBtnLabel');
-    btn.innerText = "bağlanıyor...";
+    const { name, price, size } = req.body;
 
-    fetch("https://shopier-backend-1.vercel.app/api/odeme", { // Kendi Vercel linkini yaz
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-            name: item.name,
-            price: item.price,
-            size: item.size
-        })
-    })
-    .then(res => res.text()) // Gelen veri HTML formudur
-    .then(html => {
-        // Formu sayfaya gizlice ekle ve otomatik gönder
-        const div = document.createElement('div');
-        div.style.display = 'none';
-        div.innerHTML = html;
-        document.body.appendChild(div);
-        div.querySelector('form').submit(); // SHOPİER'E UÇUŞ!
-    })
-    .catch(err => alert("Hata: " + err));
-};
+    const data = {
+        "APIuser": process.env.SHOPIER_USER,
+        "APIpassword": process.env.SHOPIER_PASS,
+        "order_id": "REEHA-" + Date.now(),
+        "product_name": `${name} (${size})`,
+        "price": "650", // Sayıyı tırnak içinde gönderin. Kuruş gerekirse "650.00" deneyin.
+        "currency": "TRY",
+        "buyer_name": "Reeha",
+        "buyer_surname": "Customer",
+        "buyer_email": "test@reeha.com.tr",
+        "buyer_phone": "05555555555",
+        "callback_url": "https://reeha.com.tr/success.html"
+    };
+
+    try {
+        const response = await fetch("https://www.shopier.com/api/v1/payment", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(data)
+        });
+
+        const formHtml = await response.text();
+        res.status(200).send(formHtml);
+    } catch (error) {
+        res.status(500).json({ error: "Shopier baglanti hatasi" });
+    }
+}
