@@ -1,4 +1,5 @@
 export default async function handler(req, res) {
+    // CORS Ayarları
     res.setHeader('Access-Control-Allow-Credentials', true);
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
@@ -11,45 +12,38 @@ export default async function handler(req, res) {
 
     if (req.method !== 'POST') return res.status(405).send('Method Not Allowed');
 
-    const { name, price, size } = req.body;
+    const { name, size } = req.body;
 
-    // ÖNEMLİ: Shopier API kullanıcısı ve şifresi Vercel Environment Variables'da tanımlı olmalı.
     const data = {
         "APIuser": process.env.SHOPIER_USER,
         "APIpassword": process.env.SHOPIER_PASS,
-        "order_id": "REEHA" + Math.floor(Math.random() * 1000000), // Benzersiz ID
+        "order_id": "REEHA" + Math.floor(Math.random() * 1000000),
         "product_name": String(name + " " + size),
-        "price": "650", // Paneldeki fiyatla kuruşu kuruşuna aynı olmalı
+        "price": "650", 
         "currency": "TRY",
         "buyer_name": "Reeha",
         "buyer_surname": "Customer",
-        "buyer_email": "info@reeha.com.tr",
-        "buyer_phone": "05320000000", // Gerçekçi formatta bir numara
+        "buyer_email": "test@reeha.com.tr",
+        "buyer_phone": "05320000000",
         "callback_url": "https://reeha.com.tr/success.html"
     };
 
     try {
         const response = await fetch("https://www.shopier.com/api/v1/payment", {
             method: "POST",
-            headers: { 
-                "Content-Type": "application/json",
-                "Accept": "text/html" // Form beklediğimizi belirtiyoruz
-            },
+            headers: { "Content-Type": "application/json" },
             body: JSON.stringify(data)
         });
 
         const result = await response.text();
 
-        // Eğer gelen cevapta <form tagı yoksa Shopier hata döndürmüştür
-        if (!result.includes('<form')) {
-            console.error("Shopier Hata Yanıtı:", result);
-            return res.status(400).send("Shopier Hatası: " + result);
+        if (result.includes('<form')) {
+            res.status(200).send(result);
+        } else {
+            res.status(400).send("Shopier Error: " + result);
         }
 
-        res.status(200).send(result);
-
     } catch (error) {
-        console.error("Catch Hatası:", error);
-        res.status(500).json({ error: "Sistemsel bir hata oluştu." });
+        res.status(500).json({ error: "Server Error", details: error.message });
     }
 }
