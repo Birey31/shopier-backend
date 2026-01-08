@@ -1,5 +1,17 @@
-// api/odeme.js
 export default async function handler(req, res) {
+    // --- CORS AYARLARI BAŞLANGIÇ ---
+    res.setHeader('Access-Control-Allow-Credentials', true);
+    res.setHeader('Access-Control-Allow-Origin', '*'); // Tüm originlere izin ver
+    res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
+    res.setHeader('Access-Control-Allow-Headers', 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version');
+
+    // OPTIONS isteğini (Preflight) hemen yanıtla
+    if (req.method === 'OPTIONS') {
+        res.status(200).end();
+        return;
+    }
+    // --- CORS AYARLARI BİTİŞ ---
+
     if (req.method !== 'POST') return res.status(405).send('Method Not Allowed');
 
     const { name, price, size } = req.body;
@@ -9,7 +21,7 @@ export default async function handler(req, res) {
         "APIpassword": process.env.SHOPIER_PASS,
         "order_id": "REEHA-" + Date.now(),
         "product_name": `${name} (${size})`,
-        "price": "650", // Sayıyı tırnak içinde gönderin. Kuruş gerekirse "650.00" deneyin.
+        "price": "650",
         "currency": "TRY",
         "buyer_name": "Reeha",
         "buyer_surname": "Customer",
