@@ -46,7 +46,7 @@ module.exports = async function handler(req, res) {
         });
         // --- EKSİK KISIM BURADA BİTTİ ---
 
-        const response = await axios.post('https://www.paytr.com/odeme/guvenli/ucret', params.toString(), {
+        const response = await axios.post('https://www.paytr.com/odeme/guvenli/get_token', params.toString(), {
             headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
         });
 
