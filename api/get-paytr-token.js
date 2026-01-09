@@ -19,21 +19,21 @@ module.exports = async function handler(req, res) {
     }
 
     try {
+        // --- BURASI EKSİK OLAN VERİ TOPLAMA KISMI ---
         const { email, total, name, address } = req.body;
 
-        // Vercel Environment Variables'dan gelen şifreler
         const merchant_id = process.env.PAYTR_ID;
         const merchant_key = process.env.PAYTR_KEY;
         const merchant_salt = process.env.PAYTR_SALT;
 
+        // 2. SÖYLEDIĞİM IP DÜZELTMESİ BURADA:
+        const user_ip = (req.headers['x-forwarded-for'] || req.connection.remoteAddress || '1.2.3.4').split(',')[0].trim();
+
         const merchant_oid = "REEHA" + Date.now(); 
         const payment_amount = Math.round(total * 100); 
-        const user_ip = req.headers['x-forwarded-for'] || '1.2.3.4';
-        
-        // Sepet formatı
         const user_basket = Buffer.from(JSON.stringify([["Ürünler", total.toString(), "1"]])).toString('base64');
 
-        // Hash oluşturma
+        // PayTR Güvenlik İmzası (Hash) Hesaplama
         const hash_str = merchant_id + user_ip + merchant_oid + email + payment_amount + user_basket + "0" + "0" + "TL" + "0";
         const paytr_token = crypto.createHmac('sha256', merchant_key).update(hash_str + merchant_salt).digest('base64');
 
@@ -44,14 +44,22 @@ module.exports = async function handler(req, res) {
             merchant_fail_url: "https://reeha.com.tr/fail",
             debug_on: "1", test_mode: "1", no_installment: "0", max_installment: "0", currency: "TL"
         });
+        // --- EKSİK KISIM BURADA BİTTİ ---
 
-        const response = await axios.post('https://www.paytr.com/odeme/guvenli/bin', params);
-        
-        // PayTR'den gelen cevabı doğrudan gönder
-        res.status(200).json(response.data);
+        const response = await axios.post('https://www.paytr.com/odeme/guvenli/bin', params.toString(), {
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+        });
 
+        // PayTR'den gelen cevabı terminale (Vercel Logs) yazdır
+        console.log("PayTR Cevabı:", response.data);
+
+        if (response.data.status === 'success') {
+            res.status(200).json({ status: 'success', token: response.data.token });
+        } else {
+            res.status(200).json({ status: 'failed', err_msg: response.data.err_msg });
+        }
     } catch (err) {
-        console.error("PayTR Hatası:", err.message);
+        console.error("Sistem Hatası:", err.message);
         res.status(500).json({ error: err.message });
     }
 };
