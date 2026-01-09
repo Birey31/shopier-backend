@@ -1,5 +1,8 @@
 const crypto = require('crypto');
 const axios = require('axios');
+const merchant_id = process.env.PAYTR_ID.trim();
+const merchant_key = process.env.PAYTR_KEY.trim();
+const merchant_salt = process.env.PAYTR_SALT.trim();
 
 module.exports = async function handler(req, res) {
     // 1. CORS BAŞLIKLARI
