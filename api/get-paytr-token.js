@@ -1,11 +1,22 @@
-res.setHeader('Access-Control-Allow-Credentials', true);
-res.setHeader('Access-Control-Allow-Origin', '*'); // Veya sadece kendi site linkin
-res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
-res.setHeader('Access-Control-Allow-Headers', 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version');
+export default async function handler(req, res) {
+    // 1. CORS BAŞLIKLARINI EKLE (HER İSTEKTE ÇALIŞMALI)
+    res.setHeader('Access-Control-Allow-Credentials', true);
+    res.setHeader('Access-Control-Allow-Origin', '*'); // Tüm sitelere izin verir
+    res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
+    res.setHeader('Access-Control-Allow-Headers', 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version');
 
-if (req.method === 'OPTIONS') {
-    res.status(200).end();
-    return;
+    // 2. PREFLIGHT (ÖN KONTROL) İSTEĞİNİ YANITLA
+    if (req.method === 'OPTIONS') {
+        res.status(200).end();
+        return;
+    }
+
+    // ... Mevcut PayTR kodların buradan aşağıda devam etsin ...
+    if (req.method !== 'POST') return res.status(405).json({ error: 'Sadece POST' });
+    
+    // const { email, total, ... } = req.body;
+    // ...
+}
 }
 const crypto = require('crypto');
 const axios = require('axios');
