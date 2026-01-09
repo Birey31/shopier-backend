@@ -37,7 +37,7 @@ module.exports = async function handler(req, res) {
 
         const params = new URLSearchParams({
             merchant_id: m_id,
-            user_ip: '1.2.3.4';,
+            user_ip: '1.2.3.4',
             merchant_oid: merchant_oid,
             email: email,
             payment_amount: payment_amount,
