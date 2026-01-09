@@ -1,5 +1,4 @@
 const crypto = require("crypto");
-const axios = require("axios");
 
 module.exports = async function handler(req, res) {
   /* ================= CORS ================= */
@@ -7,17 +6,25 @@ module.exports = async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
 
-  // Preflight request
   if (req.method === "OPTIONS") {
     return res.status(200).end();
   }
-
   /* ======================================== */
-  try {
-    const { email, total, name, address } = req.body;
 
-    if (!email || !total || !name || !address) {
-      return res.status(400).json({ error: "Eksik parametre" });
+  try {
+    const { email, total, name, address } = req.body || {};
+
+    // ✅ DOĞRU PARAMETRE KONTROLÜ
+    if (
+      email === undefined ||
+      total === undefined ||
+      name === undefined ||
+      address === undefined
+    ) {
+      return res.status(400).json({
+        error: "Eksik parametre",
+        received: { email, total, name, address }
+      });
     }
 
     const m_id = process.env.PAYTR_ID;
@@ -34,7 +41,12 @@ module.exports = async function handler(req, res) {
       "127.0.0.1";
 
     const merchant_oid = "REEHA" + Date.now();
+
+    // ✅ total güvenli parse
     const payment_amount = Math.round(Number(total) * 100);
+    if (isNaN(payment_amount) || payment_amount <= 0) {
+      return res.status(400).json({ error: "Geçersiz tutar" });
+    }
 
     const user_basket = Buffer.from(
       JSON.stringify([
@@ -42,7 +54,7 @@ module.exports = async function handler(req, res) {
       ])
     ).toString("base64");
 
-    /* ============ PAYTR HASH (DOĞRU) ============ */
+    /* ============ PAYTR HASH ============ */
     const hash_str =
       m_id +
       user_ip +
@@ -50,18 +62,17 @@ module.exports = async function handler(req, res) {
       email +
       payment_amount +
       user_basket +
-      "0" +        // no_installment
-      "0" +        // max_installment
+      "0" +
+      "0" +
       "TL" +
-      "1" +        // test_mode
+      "1" +
       m_salt;
 
     const paytr_token = crypto
       .createHmac("sha256", m_key)
       .update(hash_str)
       .digest("base64");
-
-    /* ============================================ */
+    /* =================================== */
 
     return res.status(200).json({
       status: "success",
