@@ -1,15 +1,17 @@
 const crypto = require("crypto");
-const https = require("https");
+const axios = require("axios");
 
 module.exports = async function handler(req, res) {
-  // CORS
   res.setHeader("Access-Control-Allow-Origin", "https://reeha.com.tr");
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
-  if (req.method === "OPTIONS") return res.status(200).end();
+
+  if (req.method === "OPTIONS") {
+    return res.status(200).end();
+  }
 
   try {
-    const { email, total } = req.body;
+    const { email, total, name = "Musteri", address = "Adres" } = req.body;
 
     if (!email || !total) {
       return res.status(400).json({ error: "Eksik parametre" });
@@ -20,13 +22,17 @@ module.exports = async function handler(req, res) {
     const merchant_salt = process.env.PAYTR_SALT;
 
     const user_ip =
-      req.headers["x-forwarded-for"]?.split(",")[0] || "127.0.0.1";
+      req.headers["x-forwarded-for"]?.split(",")[0] ||
+      req.socket.remoteAddress ||
+      "127.0.0.1";
 
     const merchant_oid = "REEHA" + Date.now();
     const payment_amount = Math.round(Number(total) * 100);
 
     const user_basket = Buffer.from(
-      JSON.stringify([["Ürün", total, 1]])
+      JSON.stringify([
+        ["Urun", (payment_amount / 100).toFixed(2), 1]
+      ])
     ).toString("base64");
 
     const hash_str =
@@ -39,15 +45,14 @@ module.exports = async function handler(req, res) {
       "0" +
       "0" +
       "TL" +
-      "1" +
-      merchant_salt;
+      "1";
 
     const paytr_token = crypto
       .createHmac("sha256", merchant_key)
-      .update(hash_str)
+      .update(hash_str + merchant_salt)
       .digest("base64");
 
-    const postData = new URLSearchParams({
+    const params = {
       merchant_id,
       user_ip,
       merchant_oid,
@@ -55,37 +60,36 @@ module.exports = async function handler(req, res) {
       payment_amount,
       paytr_token,
       user_basket,
-      no_installment: "0",
-      max_installment: "0",
-      currency: "TL",
-      test_mode: "1", // canlıda 0 yap
-      merchant_ok_url: "https://reeha.com.tr/odeme-basarili",
-      merchant_fail_url: "https://reeha.com.tr/odeme-hata"
-    }).toString();
+      user_name: name,
+      user_address: address,
+      user_phone: "5555555555",
+      merchant_ok_url: "https://reeha.com.tr/success",
+      merchant_fail_url: "https://reeha.com.tr/fail",
+      test_mode: 1,
+      debug_on: 1,
+      no_installment: 0,
+      max_installment: 0,
+      currency: "TL"
+    };
 
-    const paytrReq = https.request(
-      {
-        hostname: "www.paytr.com",
-        path: "/odeme/api/get-token",
-        method: "POST",
-        headers: {
-          "Content-Type": "application/x-www-form-urlencoded",
-          "Content-Length": postData.length
-        }
-      },
-      (paytrRes) => {
-        let data = "";
-        paytrRes.on("data", (chunk) => (data += chunk));
-        paytrRes.on("end", () => {
-          res.status(200).json(JSON.parse(data));
-        });
-      }
+    const paytrRes = await axios.post(
+      "https://www.paytr.com/odeme/api/get-token",
+      params
     );
 
-    paytrReq.write(postData);
-    paytrReq.end();
+    if (paytrRes.data.status !== "success") {
+      return res.status(400).json(paytrRes.data);
+    }
+
+    return res.status(200).json({
+      status: "success",
+      token: paytrRes.data.token
+    });
 
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    return res.status(500).json({
+      status: "error",
+      message: err.message
+    });
   }
 };
