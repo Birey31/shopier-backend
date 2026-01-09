@@ -37,7 +37,7 @@ module.exports = async function handler(req, res) {
 
         const params = new URLSearchParams({
             merchant_id: m_id,
-            user_ip: user_ip,
+            user_ip: '1.2.3.4';,
             merchant_oid: merchant_oid,
             email: email,
             payment_amount: payment_amount,
@@ -45,7 +45,7 @@ module.exports = async function handler(req, res) {
             user_basket: user_basket,
             user_name: name,
             user_address: address,
-            user_phone: '5348755760',
+            user_phone: '05348755760',
             merchant_ok_url: "https://reeha.com.tr/success",
             merchant_fail_url: "https://reeha.com.tr/fail",
             debug_on: "1", // Bunu 1 tutuyoruz ki hata mesajı gelsin
