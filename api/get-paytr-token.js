@@ -1,62 +1,36 @@
 const crypto = require("crypto");
+const https = require("https");
 
 module.exports = async function handler(req, res) {
-  /* ================= CORS ================= */
+  // CORS
   res.setHeader("Access-Control-Allow-Origin", "https://reeha.com.tr");
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
-
-  if (req.method === "OPTIONS") {
-    return res.status(200).end();
-  }
-  /* ======================================== */
+  if (req.method === "OPTIONS") return res.status(200).end();
 
   try {
-    const { email, total, name, address } = req.body || {};
+    const { email, total } = req.body;
 
-    // ✅ DOĞRU PARAMETRE KONTROLÜ
-    if (
-      email === undefined ||
-      total === undefined ||
-      name === undefined ||
-      address === undefined
-    ) {
-      return res.status(400).json({
-        error: "Eksik parametre",
-        received: { email, total, name, address }
-      });
+    if (!email || !total) {
+      return res.status(400).json({ error: "Eksik parametre" });
     }
 
-    const m_id = process.env.PAYTR_ID;
-    const m_key = process.env.PAYTR_KEY;
-    const m_salt = process.env.PAYTR_SALT;
-
-    if (!m_id || !m_key || !m_salt) {
-      return res.status(500).json({ error: "ENV eksik" });
-    }
+    const merchant_id = process.env.PAYTR_ID;
+    const merchant_key = process.env.PAYTR_KEY;
+    const merchant_salt = process.env.PAYTR_SALT;
 
     const user_ip =
-      req.headers["x-forwarded-for"]?.split(",")[0] ||
-      req.socket.remoteAddress ||
-      "127.0.0.1";
+      req.headers["x-forwarded-for"]?.split(",")[0] || "127.0.0.1";
 
     const merchant_oid = "REEHA" + Date.now();
-
-    // ✅ total güvenli parse
     const payment_amount = Math.round(Number(total) * 100);
-    if (isNaN(payment_amount) || payment_amount <= 0) {
-      return res.status(400).json({ error: "Geçersiz tutar" });
-    }
 
     const user_basket = Buffer.from(
-      JSON.stringify([
-        ["Urun", (payment_amount / 100).toFixed(2), 1]
-      ])
+      JSON.stringify([["Ürün", total, 1]])
     ).toString("base64");
 
-    /* ============ PAYTR HASH ============ */
     const hash_str =
-      m_id +
+      merchant_id +
       user_ip +
       merchant_oid +
       email +
@@ -66,24 +40,52 @@ module.exports = async function handler(req, res) {
       "0" +
       "TL" +
       "1" +
-      m_salt;
+      merchant_salt;
 
     const paytr_token = crypto
-      .createHmac("sha256", m_key)
+      .createHmac("sha256", merchant_key)
       .update(hash_str)
       .digest("base64");
-    /* =================================== */
 
-    return res.status(200).json({
-      status: "success",
-      token: paytr_token,
-      merchant_oid
-    });
+    const postData = new URLSearchParams({
+      merchant_id,
+      user_ip,
+      merchant_oid,
+      email,
+      payment_amount,
+      paytr_token,
+      user_basket,
+      no_installment: "0",
+      max_installment: "0",
+      currency: "TL",
+      test_mode: "1", // canlıda 0 yap
+      merchant_ok_url: "https://reeha.com.tr/odeme-basarili",
+      merchant_fail_url: "https://reeha.com.tr/odeme-hata"
+    }).toString();
+
+    const paytrReq = https.request(
+      {
+        hostname: "www.paytr.com",
+        path: "/odeme/api/get-token",
+        method: "POST",
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+          "Content-Length": postData.length
+        }
+      },
+      (paytrRes) => {
+        let data = "";
+        paytrRes.on("data", (chunk) => (data += chunk));
+        paytrRes.on("end", () => {
+          res.status(200).json(JSON.parse(data));
+        });
+      }
+    );
+
+    paytrReq.write(postData);
+    paytrReq.end();
 
   } catch (err) {
-    return res.status(500).json({
-      status: "error",
-      message: err.message
-    });
+    res.status(500).json({ error: err.message });
   }
 };
