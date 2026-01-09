@@ -9,6 +9,14 @@ module.exports = async function handler(req, res) {
   if (req.method === "OPTIONS") {
     return res.status(200).end();
   }
+  if (!email || !email.includes("@")) {
+  return res.status(400).json({
+    status: "failed",
+    error: "email invalid",
+    received: email
+  });
+}
+
 
   try {
     const { email, total, name = "Musteri", address = "Adres" } = req.body;
@@ -28,6 +36,14 @@ module.exports = async function handler(req, res) {
 
     const merchant_oid = "REEHA" + Date.now();
     const payment_amount = Math.round(Number(total) * 100);
+    if (!Number.isFinite(payment_amount) || payment_amount <= 0) {
+  return res.status(400).json({
+    status: "failed",
+    error: "payment_amount invalid",
+    received: total
+  });
+}
+
 
     const user_basket = Buffer.from(
       JSON.stringify([
