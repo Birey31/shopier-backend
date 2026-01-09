@@ -1,86 +1,37 @@
+const crypto = require('crypto');
+const axios = require('axios');
+
 export default async function handler(req, res) {
-    // CORS İzinlerini en başa ekliyoruz
-    res.setHeader('Access-Control-Allow-Credentials', true);
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
-    res.setHeader('Access-Control-Allow-Headers', 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version');
+    if (req.method !== 'POST') return res.status(405).json({ error: 'Sadece POST kabul edilir' });
 
-    if (req.method === 'OPTIONS') {
-        return res.status(200).end();
-    }
+    const { email, total, name, address } = req.body;
 
-    // Shopier Verisi
-    const data = {
-        "APIuser": process.env.SHOPIER_USER,
-        "APIpassword": process.env.SHOPIER_PASS,
-        "order_id": "REEHA" + Date.now(),
-        "product_name": "Reeha Ürün",
-        "price": "650", export default async function handler(req, res) {
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+    // Vercel panelinden ekleyeceğimiz gizli anahtarlar
+    const merchant_id = process.env.PAYTR_ID;
+    const merchant_key = process.env.PAYTR_KEY;
+    const merchant_salt = process.env.PAYTR_SALT;
 
-    if (req.method === 'OPTIONS') return res.status(200).end();
+    const merchant_oid = "REEHA" + Date.now(); 
+    const payment_amount = Math.round(total * 100); 
+    const user_ip = req.headers['x-forwarded-for'] || '127.0.0.1';
+    const user_basket = Buffer.from(JSON.stringify([["Ürünler", total.toString(), "1"]])).toString('base64');
 
-    const data = {
-        "APIuser": process.env.SHOPIER_USER,
-        "APIpassword": process.env.SHOPIER_PASS,
-        "order_id": "REEHA" + Date.now(),
-        "product_name": "Reeha Tshirt",
-        "price": "650",
-        "currency": "TRY",
-        "buyer_name": "Adem",
-        "buyer_surname": "Customer",
-        "buyer_email": "test@reeha.com.tr",
-        "buyer_phone": "05320000000",
-        "callback_url": "https://reeha.com.tr/success.html"
-    };
+    // PayTR Güvenlik İmzası (Hash)
+    const hash_str = merchant_id + user_ip + merchant_oid + email + payment_amount + user_basket + "0" + "0" + "TL" + "0";
+    const paytr_token = crypto.createHmac('sha256', merchant_key).update(hash_str + merchant_salt).digest('base64');
+
+    const params = new URLSearchParams({
+        merchant_id, user_ip, merchant_oid, email, payment_amount, paytr_token,
+        user_basket, user_name: name, user_address: address, user_phone: '05000000000',
+        merchant_ok_url: "https://reeha.vercel.app/success",
+        merchant_fail_url: "https://reeha.vercel.app/fail",
+        debug_on: "1", test_mode: "1", no_installment: "0", max_installment: "0", currency: "TL"
+    });
 
     try {
-        const response = await fetch("https://www.shopier.com/api/v1/payment", {
-            method: "POST",
-            headers: { 
-                "Content-Type": "application/json",
-                // İŞTE KRİTİK NOKTA: Kendimizi Chrome tarayıcı gibi tanıtıyoruz
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
-                "Accept-Language": "tr-TR,tr;q=0.8,en-US;q=0.5,en;q=0.3"
-            },
-            body: JSON.stringify(data)
-        });
-
-        const result = await response.text();
-
-        if (result.includes('<form')) {
-            res.status(200).send(result);
-        } else {
-            // Eğer hala bot engeline takılırsak hatayı görelim
-            res.status(403).send(result); 
-        }
-
+        const response = await axios.post('https://www.paytr.com/odeme/guvenli/bin', params);
+        res.status(200).json(response.data);
     } catch (err) {
-        res.status(500).json({ error: "Server Hatası" });
-    }
-}
-        "currency": "TRY",
-        "buyer_name": "Müşteri",
-        "buyer_surname": "Test",
-        "buyer_email": "test@reeha.com.tr",
-        "buyer_phone": "05555555555",
-        "callback_url": "https://reeha.com.tr/success.html"
-    };
-
-    try {
-        const response = await fetch("https://www.shopier.com/api/v1/payment", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(data)
-        });
-
-        const result = await response.text();
-        res.status(200).send(result);
-
-    } catch (err) {
-        res.status(500).send("Hata: " + err.message);
+        res.status(500).json({ error: err.message });
     }
 }
