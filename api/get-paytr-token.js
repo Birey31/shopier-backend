@@ -1,87 +1,77 @@
 const crypto = require('crypto');
 const axios = require('axios');
-const merchant_id = process.env.PAYTR_ID.trim();
-const merchant_key = process.env.PAYTR_KEY.trim();
-const merchant_salt = process.env.PAYTR_SALT.trim();
 
 module.exports = async function handler(req, res) {
-    // 1. CORS BAŞLIKLARI
+    // 1. CORS AYARLARI
     res.setHeader('Access-Control-Allow-Credentials', true);
     res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
-    res.setHeader('Access-Control-Allow-Headers', 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version');
+    res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
 
     if (req.method === 'OPTIONS') {
-        res.status(200).end();
-        return;
-    }
-
-    if (req.method !== 'POST') {
-        return res.status(405).json({ error: 'Sadece POST kabul edilir' });
+        return res.status(200).end();
     }
 
     try {
         const { email, total, name, address } = req.body;
 
-        const merchant_id = process.env.PAYTR_ID;
-        const merchant_key = process.env.PAYTR_KEY;
-        const merchant_salt = process.env.PAYTR_SALT;
+        // DEĞİŞKENLERİ KONTROL ET VE BOŞLUKLARI TEMİZLE
+        const m_id = (process.env.PAYTR_ID || "").trim();
+        const m_key = (process.env.PAYTR_KEY || "").trim();
+        const m_salt = (process.env.PAYTR_SALT || "").trim();
 
-        // Vercel için IP temizleme
-        const user_ip = (req.headers['x-forwarded-for'] || req.connection.remoteAddress || '1.2.3.4').split(',')[0].trim();
-
+        // IP VE ÖDEME DETAYLARI
+        const user_ip = (req.headers['x-forwarded-for'] || req.socket.remoteAddress || '1.2.3.4').split(',')[0].trim();
         const merchant_oid = "REEHA" + Date.now(); 
         const payment_amount = Math.round(total * 100); 
-        const user_basket = Buffer.from(JSON.stringify([["Sipariş Toplamı", total.toString(), "1"]])).toString('base64');
+        
+        // Sepet (Türkçe karakter içermemeli)
+        const user_basket = Buffer.from(JSON.stringify([["Order", total.toString(), "1"]])).toString('base64');
 
-        // AYARLAR (Buradaki değerler aşağıdaki hash_str ile birebir aynı sırada olmalı)
-        const no_installment = "0"; // Taksit yok
+        // AYARLAR
+        const no_installment = "0"; 
         const max_installment = "0";
         const currency = "TL";
-        const test_mode = "1"; // Test modu aktif
+        const test_mode = "1"; 
 
-        // --- KRİTİK DÜZELTME: HASH DİZİLİMİ ---
-        // PayTR dökümanına göre doğru sıra: id + ip + oid + email + amount + basket + no_inst + max_inst + curr + test_mode
-        const hash_str = merchant_id + user_ip + merchant_oid + email + payment_amount + user_basket + no_installment + max_installment + currency + test_mode;
-        
-        const paytr_token = crypto.createHmac('sha256', merchant_key).update(hash_str + merchant_salt).digest('base64');
+        // --- HASH DİZİLİMİ (PAYTR STANDARDI) ---
+        const hash_str = m_id + user_ip + merchant_oid + email + payment_amount + user_basket + no_installment + max_installment + currency + test_mode;
+        const paytr_token = crypto.createHmac('sha256', m_key).update(hash_str + m_salt).digest('base64');
 
         const params = new URLSearchParams({
-            merchant_id,
-            user_ip,
-            merchant_oid,
-            email,
-            payment_amount,
-            paytr_token,
-            user_basket,
+            merchant_id: m_id,
+            user_ip: user_ip,
+            merchant_oid: merchant_oid,
+            email: email,
+            payment_amount: payment_amount,
+            paytr_token: paytr_token,
+            user_basket: user_basket,
             user_name: name,
             user_address: address,
-            user_phone: '05300000000',
+            user_phone: '5348755760', // Başında 0 olmadan 10 hane
             merchant_ok_url: "https://reeha.com.tr/success",
             merchant_fail_url: "https://reeha.com.tr/fail",
             debug_on: "1",
-            test_mode,
-            no_installment,
-            max_installment,
-            currency
+            test_mode: test_mode,
+            no_installment: no_installment,
+            max_installment: max_installment,
+            currency: currency
         });
 
-        const response = await axios.post('https://www.paytr.com/odeme/guvenli/ucret', params.toString(), {
+        // EN GARANTİ URL: get_token
+        const response = await axios.post('https://www.paytr.com/odeme/guvenli/get_token', params.toString(), {
             headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
         });
 
-        // PayTR'den gelen yanıtı kontrol et
-        if (typeof response.data === 'string' && response.data.includes('<!DOCTYPE html>')) {
-            // Eğer hala HTML geliyorsa bilgilerde hata vardır
-            res.status(400).json({ status: 'failed', err_msg: 'PayTR parametre hatası (HTML döndü). Anahtarlarınızı kontrol edin.' });
-        } else if (response.data.status === 'success') {
+        if (response.data.status === 'success') {
             res.status(200).json({ status: 'success', token: response.data.token });
         } else {
-            res.status(200).json({ status: 'failed', err_msg: response.data.err_msg });
+            // PayTR'nin verdiği gerçek hatayı döndür (Örn: "Geçersiz Hash")
+            res.status(200).json({ status: 'failed', err_msg: response.data.err_msg || "Token alınamadı" });
         }
 
     } catch (err) {
         console.error("Sistem Hatası:", err.message);
-        res.status(500).json({ error: err.message });
+        res.status(500).json({ error: "Sunucu hatası: " + err.message });
     }
 };
