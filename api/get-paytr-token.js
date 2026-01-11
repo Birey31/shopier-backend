@@ -3,7 +3,6 @@ const https = require("https");
 const querystring = require("querystring");
 
 module.exports = async function handler(req, res) {
-  // CORS İzinleri
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
@@ -13,7 +12,7 @@ module.exports = async function handler(req, res) {
   try {
     const { email, total, name, address } = req.body;
 
-    // 1. ENV KONTROLÜ
+    // 1. ENV KONTROLLERİ
     if (!process.env.PAYTR_ID || !process.env.PAYTR_KEY || !process.env.PAYTR_SALT) {
         return res.status(500).json({ status: "failed", err_msg: "API Anahtarları Eksik" });
     }
@@ -29,18 +28,19 @@ module.exports = async function handler(req, res) {
     }
     if (!user_ip) user_ip = "88.88.88.88"; 
 
-    // Sipariş No ve Tutar
-    const merchant_oid = "SIP-" + Date.now() + Math.floor(Math.random() * 999);
+    // 3. SİPARİŞ NO (DÜZELTİLDİ: TİRE KALDIRILDI)
+    // PayTR sadece harf ve rakam ister. "SIP-" yerine "RHA" yaptık.
+    const merchant_oid = "RHA" + Date.now() + Math.floor(Math.random() * 999);
+    
     const currency = "TL"; 
     const payment_amount = Math.round(Number(total) * 100); 
 
     // Sepet Formatı
     const formattedPrice = Number(total).toFixed(2); 
     const user_basket = JSON.stringify([["Reeha Giyim", formattedPrice, 1]]);
-    const user_basket_b64 = Buffer.from(user_basket).toString("base64");
-
+    
     // Ayarlar
-    const test_mode = "1"; // Test için 1, Canlı için 0
+    const test_mode = "1"; // Canlıya geçtiğinde "0" yap
     const no_installment = "0";
     const max_installment = "0";
     const merchant_ok_url = "https://reeha.com.tr";
@@ -48,9 +48,14 @@ module.exports = async function handler(req, res) {
     const user_name = name || "Musteri";
     const user_address = address || "Adres yok";
     const user_phone = "05555555555";
-    const debug_on = "1"; // Hata detayını görmek için 1 yaptık
+    const debug_on = "1";
 
-    // 3. TOKEN İMZASI HESAPLAMA
+    // 4. PAYTR TOKEN İSTEĞİ (Get Token)
+    // Bu aşamada user_basket base64 OLMADAN gönderilir, PayTR kendisi kodlar.
+    // Ancak token imzasını oluştururken base64 yapmamız lazım.
+    
+    const user_basket_b64 = Buffer.from(user_basket).toString("base64");
+
     const hash_str = 
         merchant_id + 
         user_ip + 
@@ -68,7 +73,7 @@ module.exports = async function handler(req, res) {
         .update(hash_str + merchant_salt)
         .digest("base64");
 
-    // 4. PAYTR API'YE İSTEK ATMA (Eksik olan adım buydu!)
+    // PayTR API'ye POST edilecek veriler
     const postData = querystring.stringify({
         merchant_id,
         user_ip,
@@ -76,7 +81,7 @@ module.exports = async function handler(req, res) {
         email,
         payment_amount,
         paytr_token,
-        user_basket,
+        user_basket, // API isteğinde normal JSON string gider
         debug_on,
         no_installment,
         max_installment,
@@ -100,7 +105,6 @@ module.exports = async function handler(req, res) {
         },
     };
 
-    // PayTR'den yanıt bekle
     const paytrResponse = await new Promise((resolve, reject) => {
         const req = https.request(options, (res) => {
             let data = "";
@@ -112,9 +116,6 @@ module.exports = async function handler(req, res) {
         req.end();
     });
 
-    console.log("PayTR Yanıtı:", paytrResponse);
-
-    // 5. SONUÇ: Token'ı Frontend'e Dön
     if (paytrResponse.status === "success") {
         return res.status(200).json({ status: "success", token: paytrResponse.token });
     } else {
