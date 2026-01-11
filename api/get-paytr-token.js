@@ -13,7 +13,7 @@ module.exports = async function handler(req, res) {
   try {
     const { email, total, name, address } = req.body;
 
-    // 1. ENV KONTROLLERİ
+    // 1. ENV KONTROLÜ
     if (!process.env.PAYTR_ID || !process.env.PAYTR_KEY || !process.env.PAYTR_SALT) {
         return res.status(500).json({ status: "failed", err_msg: "API Anahtarları Eksik" });
     }
@@ -29,20 +29,21 @@ module.exports = async function handler(req, res) {
     }
     if (!user_ip) user_ip = "88.88.88.88"; 
 
-    // 3. SİPARİŞ NO (Sadece Harf ve Rakam - Özel karakter YOK)
+    // 3. SİPARİŞ NO (RHA kısaltmasıyla)
     const merchant_oid = "RHA" + Date.now() + Math.floor(Math.random() * 999);
     
     const currency = "TL"; 
     const payment_amount = Math.round(Number(total) * 100); 
 
-    // 4. SEPET FORMATI (HATA BURADAYDI - DÜZELTİLDİ)
+    // --- KRİTİK DÜZELTME BURADA ---
     const formattedPrice = Number(total).toFixed(2); 
-    // Sepeti önce JSON yapıyoruz
-    const basketJSON = JSON.stringify([["Reeha Giyim", formattedPrice, 1]]);
-    // Sonra Base64 formatına çeviriyoruz (PayTR bunu istiyor)
-    const user_basket = Buffer.from(basketJSON).toString("base64");
+    
+    // 1. Gönderilecek Sepet (JSON String formatında)
+    const user_basket_json = JSON.stringify([["Reeha Giyim", formattedPrice, 1]]);
+    
+    // 2. Şifrelemede Kullanılacak Sepet (Base64 formatında)
+    const user_basket_b64 = Buffer.from(user_basket_json).toString("base64");
 
-    // Ayarlar
     const test_mode = "1"; // Canlıya geçince "0" yap
     const no_installment = "0";
     const max_installment = "0";
@@ -53,15 +54,14 @@ module.exports = async function handler(req, res) {
     const user_phone = "05555555555";
     const debug_on = "1";
 
-    // 5. TOKEN İMZASI HESAPLAMA
-    // Burada kullanılan user_basket, yukarıdaki Base64 formatındaki veridir.
+    // 5. TOKEN İMZASI HESAPLAMA (Burada Base64 Kullanıyoruz)
     const hash_str = 
         merchant_id + 
         user_ip + 
         merchant_oid + 
         email + 
         payment_amount + 
-        user_basket + 
+        user_basket_b64 + // DİKKAT: Burada B64
         no_installment + 
         max_installment + 
         currency + 
@@ -73,7 +73,7 @@ module.exports = async function handler(req, res) {
         .digest("base64");
 
     // 6. PAYTR API'YE İSTEK ATMA
-    // user_basket'i Base64 olarak gönderiyoruz.
+    // DİKKAT: Burada user_basket olarak JSON String gönderiyoruz!
     const postData = querystring.stringify({
         merchant_id,
         user_ip,
@@ -81,7 +81,7 @@ module.exports = async function handler(req, res) {
         email,
         payment_amount,
         paytr_token,
-        user_basket, 
+        user_basket: user_basket_json, // BURASI DEĞİŞTİ (Base64 değil, JSON gidiyor)
         debug_on,
         no_installment,
         max_installment,
@@ -121,7 +121,6 @@ module.exports = async function handler(req, res) {
     if (paytrResponse.status === "success") {
         return res.status(200).json({ status: "success", token: paytrResponse.token });
     } else {
-        // Hata varsa detayını frontend'e gönder
         return res.status(400).json({ status: "failed", err_msg: paytrResponse.reason });
     }
 
