@@ -25,19 +25,19 @@ module.exports = async function handler(req, res) {
     if (user_ip && user_ip.indexOf(",") > 0) user_ip = user_ip.split(",")[0].trim();
     if (!user_ip) user_ip = "88.88.88.88"; 
 
-    // Sipariş No ve Tutar
+    // --- HATAYI ÇÖZEN SATIR BURASI ---
+    // Eski Hali: "SIP-" + ... (Tire vardı, hata veriyordu)
+    // Yeni Hali: "RHA" + ... (Sadece harf ve rakam)
     const merchant_oid = "RHA" + Date.now() + Math.floor(Math.random() * 999);
+    
     const currency = "TL"; 
     const payment_amount = Math.round(Number(total) * 100); 
 
-    // --- ÖNEMLİ DÜZELTME BURADA ---
+    // Sepet Ayarı (Base64)
     const formattedPrice = Number(total).toFixed(2); 
     const user_basket_json = JSON.stringify([["Reeha Giyim", formattedPrice, 1]]);
-    
-    // Hem Token oluştururken HEM DE PayTR'ye gönderirken bu Base64 halini kullanacağız.
     const user_basket_b64 = Buffer.from(user_basket_json).toString("base64");
 
-    // Diğer Parametreler
     const test_mode = "1"; // Canlıya geçince "0" yap
     const no_installment = "0";
     const max_installment = "0";
@@ -49,7 +49,7 @@ module.exports = async function handler(req, res) {
     const debug_on = "1";
     const timeout_limit = "30";
 
-    // İMZA (TOKEN) HESAPLAMA
+    // İMZA HESAPLAMA
     const hash_str = 
         merchant_id + user_ip + merchant_oid + email + payment_amount + 
         user_basket_b64 + no_installment + max_installment + currency + test_mode;
@@ -59,7 +59,7 @@ module.exports = async function handler(req, res) {
         .update(hash_str + merchant_salt)
         .digest("base64");
 
-    // FRONTEND'E DÖNEN CEVAP
+    // Frontend'e Dön
     return res.status(200).json({
       status: "success",
       params: {
@@ -69,7 +69,7 @@ module.exports = async function handler(req, res) {
         email,
         payment_amount,
         paytr_token,
-        user_basket: user_basket_b64, // DÜZELTİLDİ: Artık Base64 gidiyor!
+        user_basket: user_basket_b64,
         debug_on,
         no_installment,
         max_installment,
