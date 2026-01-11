@@ -92,3 +92,39 @@ module.exports = async function handler(req, res) {
         return res.status(500).json({ status: "failed", err_msg: error.message });
     }
 };
+// Gerekiyorsa axios veya node-fetch paketini kur: npm install axios
+const axios = require('axios');
+
+export default async function handler(req, res) {
+    if (req.method === 'POST') {
+        const { email, total, name, address, note } = req.body;
+
+        // Telegram Bilgilerin
+        const TELEGRAM_TOKEN = '8563628457:AAFYCsX4mJi6lRqC3o_mCvrcvtPN2a2Six0';
+        const CHAT_ID = '6535452092';
+
+        // Mesaj Taslağı
+        const message = `
+📦 **Yeni Sipariş Denemesi!**
+👤 **Müşteri:** ${name}
+📧 **E-posta:** ${email}
+💰 **Tutar:** ${total} TL
+🏠 **Adres:** ${address}
+📝 **Müşteri Notu:** ${note}
+        `;
+
+        try {
+            // Telegram'a mesaj gönder
+            await axios.post(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`, {
+                chat_id: CHAT_ID,
+                text: message,
+                parse_mode: 'Markdown'
+            });
+
+            // ... PayTR token alma işlemlerin devam eder ...
+            
+        } catch (error) {
+            console.error('Telegram Hatası:', error);
+        }
+    }
+}
