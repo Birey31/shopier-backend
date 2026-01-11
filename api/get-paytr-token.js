@@ -68,6 +68,15 @@ module.exports = async function handler(req, res) {
         .createHmac("sha256", merchant_key)
         .update(hash_str + merchant_salt)
         .digest("base64");
+    
+    console.log("ÜRETİLEN TOKEN:", paytr_token); // Loglara token'ı yazdır
+    console.log("GİDEN VERİLER:", { merchant_id, email, payment_amount, user_ip });
+
+    return res.status(200).json({
+      status: "success",
+      token: paytr_token
+    });
+    
 
     return res.status(200).json({
       status: "success",
