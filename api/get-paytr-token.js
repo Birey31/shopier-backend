@@ -14,27 +14,53 @@ module.exports = async function handler(req, res) {
         const { email, total, name, address, note } = req.body;
 
         // --- TELEGRAM BİLDİRİMİ (EKSİKSİZ) ---
-        const TELEGRAM_TOKEN = '8563628457:AAFYCsX4mJi6lRqC3o_mCvrcvtPN2a2Six0';
-        const CHAT_ID = '6535452092';
-        const message = `
-📦 **Reeha - Yeni Sipariş Denemesi**
-👤 **Müşteri:** ${name || "Belirtilmedi"}
-📧 **E-posta:** ${email}
-💰 **Tutar:** ${total} TL
-🏠 **Adres:** ${address || "Belirtilmedi"}
-📝 **Not:** ${note || "Not bırakılmadı."}
-        `;
+       // --- TELEGRAM BİLDİRİMİ (GARANTİLİ YÖNTEM) ---
+const TELEGRAM_TOKEN = '8563628457:AAFYCsX4mJi6lRqC3o_mCvrcvtPN2a2Six0';
+const CHAT_ID = '6535452092';
 
-        // Telegram'a asenkron gönderim (Hata alsa bile ödemeyi bozmaz)
-        const teleData = JSON.stringify({ chat_id: CHAT_ID, text: message, parse_mode: 'Markdown' });
+const message = `
+<b>📦 Reeha - Yeni Sipariş Denemesi</b>
+<b>👤 Müşteri:</b> ${name || "Belirtilmedi"}
+<b>📧 E-posta:</b> ${email}
+<b>💰 Tutar:</b> ${total} TL
+<b>🏠 Adres:</b> ${address || "Belirtilmedi"}
+<b>📝 Not:</b> ${note || "Not bırakılmadı."}
+`;
+
+try {
+    const teleData = JSON.stringify({ 
+        chat_id: CHAT_ID, 
+        text: message, 
+        parse_mode: 'HTML' // HTML daha güvenlidir
+    });
+
+    // Mesajın gerçekten gittiğinden emin olmak için Promise içine alıp BEKLİYORUZ
+    await new Promise((resolve) => {
         const teleReq = https.request({
             hostname: 'api.telegram.org',
             path: `/bot${TELEGRAM_TOKEN}/sendMessage`,
             method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Content-Length': teleData.length }
+            headers: { 
+                'Content-Type': 'application/json', 
+                'Content-Length': Buffer.byteLength(teleData) 
+            }
+        }, (res) => {
+            res.on('data', () => {});
+            res.on('end', () => resolve());
         });
+        
+        teleReq.on('error', (e) => {
+            console.error("Telegram Error:", e);
+            resolve(); // Hata olsa bile ödemeyi engellemesin
+        });
+        
         teleReq.write(teleData);
         teleReq.end();
+    });
+} catch (teleErr) {
+    console.error("Telegram catch:", teleErr);
+}
+// ----------------------------------------------
 
         // --- PayTR İŞLEMLERİ (SENİN ORİJİNAL KODUN) ---
         const merchant_id = process.env.PAYTR_ID?.trim();
