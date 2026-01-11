@@ -30,9 +30,11 @@ module.exports = async function handler(req, res) {
     const currency = "TL"; 
     const payment_amount = Math.round(Number(total) * 100); 
 
-    // Sepet Hazırlığı
+    // --- ÖNEMLİ DÜZELTME BURADA ---
     const formattedPrice = Number(total).toFixed(2); 
     const user_basket_json = JSON.stringify([["Reeha Giyim", formattedPrice, 1]]);
+    
+    // Hem Token oluştururken HEM DE PayTR'ye gönderirken bu Base64 halini kullanacağız.
     const user_basket_b64 = Buffer.from(user_basket_json).toString("base64");
 
     // Diğer Parametreler
@@ -57,7 +59,7 @@ module.exports = async function handler(req, res) {
         .update(hash_str + merchant_salt)
         .digest("base64");
 
-    // Backend artık PayTR'ye gitmiyor, verileri Frontend'e veriyor.
+    // FRONTEND'E DÖNEN CEVAP
     return res.status(200).json({
       status: "success",
       params: {
@@ -67,7 +69,7 @@ module.exports = async function handler(req, res) {
         email,
         payment_amount,
         paytr_token,
-        user_basket: user_basket_json,
+        user_basket: user_basket_b64, // DÜZELTİLDİ: Artık Base64 gidiyor!
         debug_on,
         no_installment,
         max_installment,
