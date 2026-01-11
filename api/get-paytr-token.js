@@ -6,14 +6,12 @@ module.exports = async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
 
-  if (req.method === "OPTIONS") {
-    return res.status(200).end();
-  }
+  if (req.method === "OPTIONS") return res.status(200).end();
 
   try {
     const { email, total, name, address } = req.body;
 
-    // ENV Kontrol
+    // 1. ENV KONTROLÜ
     if (!process.env.PAYTR_ID || !process.env.PAYTR_KEY || !process.env.PAYTR_SALT) {
         return res.status(500).json({ status: "failed", err_msg: "API Anahtarları Eksik" });
     }
@@ -21,39 +19,39 @@ module.exports = async function handler(req, res) {
     const merchant_id = process.env.PAYTR_ID;
     const merchant_key = process.env.PAYTR_KEY;
     const merchant_salt = process.env.PAYTR_SALT;
-
-    // --- KRİTİK NOKTA: IP ADRESİ TESPİTİ ---
-    // Vercel'de kullanıcı IP'si 'x-forwarded-for' başlığında gelir.
-    let user_ip = req.headers["x-forwarded-for"] || req.socket.remoteAddress;
     
-    // Bazen IP'ler "123.123.123.123, 10.0.0.1" şeklinde virgüllü gelir, ilkini almalıyız.
+    // 2. IP ADRESİ (Vercel için kritik)
+    let user_ip = req.headers["x-forwarded-for"] || req.socket.remoteAddress;
     if (user_ip && user_ip.indexOf(",") > 0) {
         user_ip = user_ip.split(",")[0].trim();
     }
-    
-    // Eğer IP hala yoksa (Localhost testlerinde)
-    if (!user_ip || user_ip === "::1") {
-        user_ip = "127.0.0.1";
-    }
-    
-    console.log("Kullanıcı IP:", user_ip); // Loglardan kontrol edebilirsin
+    // IP boşsa (Localhost hatası almamak için)
+    if (!user_ip) user_ip = "88.88.88.88"; 
 
+    // Sipariş No
     const merchant_oid = "SIP-" + Date.now() + Math.floor(Math.random() * 999);
-    const payment_amount = Math.round(Number(total) * 100);
-    const currency = "TL";
     
-    // TEST MODU (1=Test, 0=Canlı)
-    // PayTR panelin Test modundaysa burası "1" olmalı.
+    // 3. FİYAT AYARLARI (HATA BURADAYDI)
+    const currency = "TL"; 
+    // Toplam tutarı kuruşa çevir (Örn: 100.00 -> 10000)
+    const payment_amount = Math.round(Number(total) * 100); 
+
+    // 4. SEPET İÇERİĞİ (DÜZELTİLDİ)
+    // PayTR fiyatı string ve kuruşlu ister: "100.00" gibi
+    const formattedPrice = Number(total).toFixed(2); 
+    const user_basket = JSON.stringify([["Reeha Giyim", formattedPrice, 1]]);
+    const user_basket_b64 = Buffer.from(user_basket).toString("base64");
+
+    // 5. TEST MODU (1 = Test, 0 = Canlı)
+    // Mağazan onaylanana kadar burası "1" kalmalı
     const test_mode = "1"; 
 
-    const user_basket = JSON.stringify([["Reeha Giyim", String(total), 1]]);
-    const user_basket_b64 = Buffer.from(user_basket).toString("base64");
     const no_installment = "0";
     const max_installment = "0";
     const merchant_ok_url = "https://reeha.com.tr";
     const merchant_fail_url = "https://reeha.com.tr";
 
-    // Token Hesaplama
+    // 6. TOKEN OLUŞTURMA
     const hash_str = 
         merchant_id + 
         user_ip + 
@@ -77,7 +75,7 @@ module.exports = async function handler(req, res) {
     });
 
   } catch (error) {
-    console.error("Backend Error:", error);
+    console.error("Backend Hatası:", error);
     return res.status(500).json({ status: "failed", err_msg: error.message });
   }
 };
